@@ -87,7 +87,7 @@ def load_library(module_name: str) -> bool:
     return False
 
 
-ENABLE_CUSTOMIZED_OP = load_library("deepmd_op_pt")
+ENABLE_CUSTOMIZED_OP = None#load_library("deepmd_op_pt")
 
 __all__ = [
     "ENABLE_CUSTOMIZED_OP",

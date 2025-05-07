@@ -976,6 +976,7 @@ class Trainer:
 
             elapsed_batch = self.num_steps - self.start_step
             if self.timing_in_training and elapsed_batch // self.disp_freq > 0:
+                log.info(msg=f"reserved memory: {torch.cuda.memory_reserved() / 1024**2:.2f} MB")
                 if self.start_step >= 2 * self.disp_freq:
                     log.info(
                         "average training time: %.4f s/batch (exclude first %d batches)",
