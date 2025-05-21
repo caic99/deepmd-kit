@@ -299,9 +299,16 @@ def train(
     config = update_deepmd_input(config, warning=True, dump="input_v2_compat.json")
     config = normalize(config, multi_task=multi_task)
 
+    # Initialize DDP
+    if os.environ.get("LOCAL_RANK") is not None:
+        dist.init_process_group(backend="cuda:nccl,cpu:gloo")
+        global_rank = torch.distributed.get_rank()
+    else:
+        global_rank = 0
+
     # do neighbor stat
     min_nbor_dist = None
-    if not skip_neighbor_stat:
+    if not skip_neighbor_stat and global_rank == 0:
         log.info(
             "Calculate neighbor statistics... (add --skip-neighbor-stat to skip this step)"
         )
@@ -332,10 +339,8 @@ def train(
 
     with open(output, "w") as fp:
         json.dump(config, fp, indent=4)
-
-    # Initialize DDP
-    if os.environ.get("LOCAL_RANK") is not None:
-        dist.init_process_group(backend="cuda:nccl,cpu:gloo")
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
 
     trainer = get_trainer(
         config,
