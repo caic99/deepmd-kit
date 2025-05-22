@@ -9,7 +9,9 @@ from typing import (
 )
 
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.dpmodel.common import PRECISION_DICT as NP_PRECISION_DICT
 from deepmd.dpmodel.output_def import (

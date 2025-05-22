@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+<<<<<<< Updated upstream
 import torch
+=======
+import numpy as np
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
+>>>>>>> Stashed changes
 
 from deepmd.utils.batch_size import AutoBatchSize as AutoBatchSizeBase
 
@@ -36,7 +43,7 @@ class AutoBatchSize(AutoBatchSizeBase):
         bool
             True if GPU is available
         """
-        return torch.cuda.is_available()
+        return torch_npu.npu.is_available()
 
     def is_oom_error(self, e: Exception) -> bool:
         """Check if the exception is an OOM error.

@@ -2,7 +2,9 @@
 import logging
 import math
 
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 import torch.distributed as dist
 from torch.optim.optimizer import (
     Optimizer,
@@ -92,7 +94,7 @@ class LKFOptimizer(Optimizer):
                     for i in range(block_num):
                         device_id = self.get_device_id(index)
                         index += 1
-                        dist_device = torch.device("cuda:" + str(device_id))
+                        dist_device = torch.device("npu:" + str(device_id))
                         if i != block_num - 1:
                             params_packed_index.append(block_size)
                             if self.rank == device_id:
@@ -123,7 +125,7 @@ class LKFOptimizer(Optimizer):
                     index += 1
                     params_packed_index.append(param_num)
                     if self.rank == device_id:
-                        dist_device = torch.device("cuda:" + str(device_id))
+                        dist_device = torch.device("npu:" + str(device_id))
                         P.append(
                             torch.eye(param_num, dtype=data_type, device=dist_device)
                         )
@@ -201,7 +203,7 @@ class LKFOptimizer(Optimizer):
 
             P[i] = (1 / kalman_lambda) * (P[i] - A * torch.matmul(K, K.T))
         if self.dist_init:
-            device = torch.device("cuda:" + str(self.rank))
+            device = torch.device("npu:" + str(self.rank))
             local_shape = [tensor.shape[0] for tensor in weights]
             shape_list = [
                 torch.zeros_like(torch.empty(1), dtype=torch.float64, device=device)  # pylint: disable=no-explicit-dtype,no-explicit-device

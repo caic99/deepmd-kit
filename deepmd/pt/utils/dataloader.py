@@ -14,7 +14,9 @@ from threading import (
 
 import h5py
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 import torch.distributed as dist
 import torch.multiprocessing
 from torch.utils.data import (
@@ -149,14 +151,14 @@ class DpLoaderSet(Dataset):
                 sampler=system_sampler,
                 collate_fn=collate_batch,
                 shuffle=(not (dist.is_available() and dist.is_initialized()))
-                and shuffle,
+                and shuffle
             )
             self.dataloaders.append(system_dataloader)
             self.index.append(len(system_dataloader))
             self.total_batch += len(system_dataloader)
         # Initialize iterator instances for DataLoader
         self.iters = []
-        with torch.device("cpu"):
+        with torch.device("npu"):
             for item in self.dataloaders:
                 self.iters.append(iter(item))
 
@@ -294,7 +296,7 @@ def get_weighted_sampler(training_data, prob_style, sys_prob=False):
     log.debug("Generated weighted sampler with prob array: " + str(probs))
     # training_data.total_batch is the size of one epoch, you can increase it to avoid too many  rebuilding of iterators
     len_sampler = training_data.total_batch * max(env.NUM_WORKERS, 1)
-    with torch.device("cpu"):
+    with torch.device("npu"):
         sampler = WeightedRandomSampler(probs, len_sampler, replacement=True)
     return sampler
 

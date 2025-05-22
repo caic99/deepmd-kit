@@ -13,7 +13,9 @@ from typing import (
 )
 
 import h5py
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 import torch.distributed as dist
 import torch.version
 from torch.distributed.elastic.multiprocessing.errors import (
@@ -108,7 +110,12 @@ def get_trainer(
     local_rank = os.environ.get("LOCAL_RANK")
     if local_rank is not None:
         local_rank = int(local_rank)
+<<<<<<< Updated upstream
         dist.init_process_group(backend="cuda:nccl,cpu:gloo")
+=======
+        assert dist.is_hccl_available()
+        dist.init_process_group(backend="hccl")
+>>>>>>> Stashed changes
 
     def prepare_trainer_input_single(
         model_params_single, data_dict_single, rank=0, seed=None

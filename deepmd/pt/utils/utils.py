@@ -7,7 +7,9 @@ from typing import (
 
 import ml_dtypes
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 import torch.nn.functional as F
 
 from deepmd.dpmodel.common import PRECISION_DICT as NP_PRECISION_DICT

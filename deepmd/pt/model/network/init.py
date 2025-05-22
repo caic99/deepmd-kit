@@ -3,7 +3,9 @@ import math
 import warnings
 from typing import Optional as _Optional
 
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 from torch import (
     Tensor,
 )

@@ -5,7 +5,9 @@ from typing import (
     Union,
 )
 
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.dpmodel.utils import EnvMat as DPEnvMat
 from deepmd.dpmodel.utils.seed import (

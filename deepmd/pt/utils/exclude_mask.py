@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.pt.utils.utils import (
     to_torch_tensor,

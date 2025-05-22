@@ -2,7 +2,9 @@
 import os
 
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.common import (
     VALID_PRECISION,
@@ -21,15 +23,19 @@ try:
     ncpus = len(os.sched_getaffinity(0))
 except AttributeError:
     ncpus = os.cpu_count()
+<<<<<<< Updated upstream
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", min(4, ncpus)))
+=======
+NUM_WORKERS = int(os.environ.get("NUM_WORKERS", min(0, ncpus)))
+>>>>>>> Stashed changes
 # Make sure DDP uses correct device if applicable
 LOCAL_RANK = os.environ.get("LOCAL_RANK")
 LOCAL_RANK = int(0 if LOCAL_RANK is None else LOCAL_RANK)
 
-if os.environ.get("DEVICE") == "cpu" or torch.cuda.is_available() is False:
-    DEVICE = torch.device("cpu")
+if os.environ.get("DEVICE") == "cpu" or torch_npu.npu.is_available() is False:
+    DEVICE = torch.device("npu")
 else:
-    DEVICE = torch.device(f"cuda:{LOCAL_RANK}")
+    DEVICE = torch.device(f"npu:{LOCAL_RANK}")
 
 JIT = False
 CACHE_PER_SYS = 5  # keep at most so many sets per sys in memory

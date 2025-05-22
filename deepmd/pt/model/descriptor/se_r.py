@@ -6,8 +6,14 @@ from typing import (
 )
 
 import numpy as np
+<<<<<<< Updated upstream
 import torch
 import torch.nn as nn
+=======
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
+>>>>>>> Stashed changes
 
 from deepmd.dpmodel.utils import EnvMat as DPEnvMat
 from deepmd.dpmodel.utils.seed import (

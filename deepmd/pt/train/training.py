@@ -13,7 +13,9 @@ from typing import (
 )
 
 import numpy as np
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.common import (
     symlink_prefix_files,
@@ -175,9 +177,9 @@ class Trainer:
                     else 0,  # setting to 0 diverges the behavior of its iterator; should be >=1
                     drop_last=False,
                     collate_fn=lambda batch: batch,  # prevent extra conversion
-                    pin_memory=True,
+                    pin_memory=True
                 )
-                with torch.device("cpu"):
+                with torch.device("npu"):
                     _data_buffered = BufferedIterator(iter(_dataloader))
                 return _dataloader, _data_buffered
 
@@ -573,7 +575,7 @@ class Trainer:
             )
 
         if dist.is_available() and dist.is_initialized():
-            torch.cuda.set_device(LOCAL_RANK)
+            torch_npu.npu.set_device(LOCAL_RANK)
             # DDP will guarantee the model parameters are identical across all processes
             self.wrapper = DDP(
                 self.wrapper,
@@ -707,7 +709,14 @@ class Trainer:
                         self.gradient_max_norm,
                         error_if_nonfinite=True,
                     )
+<<<<<<< Updated upstream
                 with torch.device("cpu"):
+=======
+                    if not torch.isfinite(grad_norm).all():
+                        # check local gradnorm single GPU case, trigger NanDetector
+                        raise FloatingPointError("gradients are Nan/Inf")
+                with torch.device("npu"):
+>>>>>>> Stashed changes
                     self.optimizer.step()
                 self.scheduler.step()
             elif self.opt_type == "LKF":
@@ -1064,7 +1073,7 @@ class Trainer:
                     batch_data = next(iter(self.training_data))
                 except StopIteration:
                     # Refresh the status of the dataloader to start from a new epoch
-                    with torch.device("cpu"):
+                    with torch.device("npu"):
                         self.training_data = BufferedIterator(
                             iter(self.training_dataloader)
                         )

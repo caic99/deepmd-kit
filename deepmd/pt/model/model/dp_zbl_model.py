@@ -3,7 +3,9 @@ from typing import (
     Optional,
 )
 
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.pt.model.atomic_model import (
     DPZBLLinearEnergyAtomicModel,

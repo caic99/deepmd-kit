@@ -6,7 +6,9 @@ from typing import (
     Optional,
 )
 
-import torch
+import torch 
+import torch_npu 
+# from torch_npu.contrib import transfer_to_npu
 
 from deepmd.dpmodel.output_def import (
     FittingOutputDef,
