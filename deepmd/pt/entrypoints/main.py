@@ -251,7 +251,8 @@ def train(
     output: str = "out.json",
 ) -> None:
     log.info("Configuration path: %s", input_file)
-    env.CUSTOM_OP_USE_JIT = True
+    if not env.COMPILE:
+        env.CUSTOM_OP_USE_JIT = True
     if LOCAL_RANK == 0:
         SummaryPrinter()()
     with open(input_file) as fin:

@@ -53,6 +53,7 @@ from deepmd.pt.utils.dataloader import (
     get_sampler_from_params,
 )
 from deepmd.pt.utils.env import (
+    COMPILE,
     DEVICE,
     JIT,
     LOCAL_RANK,
@@ -413,9 +414,13 @@ class Trainer:
             self.lr_exp = get_lr(config["learning_rate"])
 
         # JIT
-        if JIT:
+        if JIT or COMPILE:
             self.model = torch.jit.script(self.model)
-
+        if COMPILE:
+            self.model = torch.compile(
+                self.model,
+                dynamic=True,
+            )
         # Model Wrapper
         self.wrapper = ModelWrapper(self.model, self.loss, model_params=model_params)
         self.start_step = 0
