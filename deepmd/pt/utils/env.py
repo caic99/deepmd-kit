@@ -46,7 +46,7 @@ JIT = False
 CACHE_PER_SYS = 5  # keep at most so many sets per sys in memory
 ENERGY_BIAS_TRAINABLE = True
 CUSTOM_OP_USE_JIT = False
-COMPILE = True
+COMPILE = False
 
 PRECISION_DICT = {
     "float16": torch.float16,
