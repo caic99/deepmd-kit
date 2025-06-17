@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 import torch
+import torch_npu
 
 from deepmd.common import (
     VALID_PRECISION,
@@ -37,10 +38,10 @@ if multiprocessing.get_start_method() != "fork":
 LOCAL_RANK = os.environ.get("LOCAL_RANK")
 LOCAL_RANK = int(0 if LOCAL_RANK is None else LOCAL_RANK)
 
-if os.environ.get("DEVICE") == "cpu" or torch.cuda.is_available() is False:
+if os.environ.get("DEVICE") == "cpu" or torch_npu.npu.is_available() is False:
     DEVICE = torch.device("cpu")
 else:
-    DEVICE = torch.device(f"cuda:{LOCAL_RANK}")
+    DEVICE = torch.device(f"npu:{LOCAL_RANK}")
 
 JIT = False
 CACHE_PER_SYS = 5  # keep at most so many sets per sys in memory

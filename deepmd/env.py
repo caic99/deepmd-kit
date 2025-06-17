@@ -30,7 +30,7 @@ CONFIG_FILE = SHARED_LIB_DIR / "run_config.ini"
 
 
 # FLOAT_PREC
-dp_float_prec = os.environ.get("DP_INTERFACE_PREC", "high").lower()
+dp_float_prec = os.environ.get("DP_INTERFACE_PREC", "low").lower()
 if dp_float_prec in ("high", ""):
     # default is high
     GLOBAL_NP_FLOAT_PRECISION = np.float64
@@ -38,7 +38,7 @@ if dp_float_prec in ("high", ""):
     global_float_prec = "double"
 elif dp_float_prec == "low":
     GLOBAL_NP_FLOAT_PRECISION = np.float32
-    GLOBAL_ENER_FLOAT_PRECISION = np.float64
+    GLOBAL_ENER_FLOAT_PRECISION = np.float32
     global_float_prec = "float"
 else:
     raise RuntimeError(
