@@ -120,10 +120,12 @@ def make_hessian_model(T_Model):
                         for nloc in range(force.shape[1]):
                             for i in range(3):
                                 # TODO: possibility of parallelization?
+                                # use an eye matrix for grad_output and set is_grad_batched=True
                                 hess[nf, nloc, i] = torch.autograd.grad(
                                     outputs=force[nf, nloc, i],
                                     inputs=coord,
-                                    create_graph=True,
+                                    create_graph=self.training,
+                                    retain_graph=True,
                                 )[0][nf] # only [nf] contains values, other chunks are zero
 
                     hess = hess.view(
