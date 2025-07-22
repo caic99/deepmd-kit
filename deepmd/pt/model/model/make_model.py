@@ -298,7 +298,7 @@ def make_model(T_AtomicModel: type[BaseAtomicModel]):
                 self.atomic_output_def(),
                 cc_ext,
                 do_atomic_virial=do_atomic_virial,
-                create_graph=self.training,
+                create_graph=self.training or hasattr(self, "hess_fitting_def")
             )
             model_predict = self.output_type_cast(model_predict, input_prec)
             return model_predict
