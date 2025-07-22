@@ -92,7 +92,12 @@ def make_hessian_model(T_Model):
                 The keys are defined by the `ModelOutputDef`.
 
             """
-            ret = super().forward_common(
+            vdef = self.atomic_output_def()
+            hess_yes = [vdef[kk].r_hessian for kk in vdef.keys()]
+            if any(hess_yes):
+                coord.requires_grad = True
+            # assert self.training # todo
+            ret:dict[str,torch.Tensor] = super().forward_common(
                 coord,
                 atype,
                 box=box,
@@ -100,16 +105,39 @@ def make_hessian_model(T_Model):
                 aparam=aparam,
                 do_atomic_virial=do_atomic_virial,
             )
-            vdef = self.atomic_output_def()
-            hess_yes = [vdef[kk].r_hessian for kk in vdef.keys()]
+
             if any(hess_yes):
-                hess = self._cal_hessian_all(
-                    coord,
-                    atype,
-                    box=box,
-                    fparam=fparam,
-                    aparam=aparam,
-                )
+                if (
+                    vdef["energy"].r_hessian
+                    and sum(hess_yes) == 1
+                    and "energy_derv_r" in ret
+                    # and nf:=coord.shape[0] == 1 # large overhead for nf>1; maybe a warning is fine?
+                ):  # use force to calculate energy hessian
+                    force:torch.Tensor = ret["energy_derv_r"].squeeze(-2) # nf x nloc x 3
+                    hess = torch.zeros(*force.shape, *coord.shape[-2:], device=force.device, dtype=force.dtype) # nf, nloc, 3, nloc, 3
+                    # TODO: lazy compute
+                    for nf in range(force.shape[0]):
+                        for nloc in range(force.shape[1]):
+                            for i in range(3):
+                                # TODO: possibility of parallelization?
+                                hess[nf, nloc, i] = torch.autograd.grad(
+                                    outputs=force[nf, nloc, i],
+                                    inputs=coord,
+                                    create_graph=True,
+                                )[0][nf] # only [nf] contains values, other chunks are zero
+
+                    hess = hess.view(
+                        force.shape[0], 1, force.shape[1] * 3, force.shape[1] * 3
+                    )  # (nf, 1, nloc * 3, nloc * 3)
+                    hess = {get_hessian_name("energy"): -hess}  # negative sign for force
+                else:
+                    hess = self._cal_hessian_all(
+                        coord,
+                        atype,
+                        box=box,
+                        fparam=fparam,
+                        aparam=aparam,
+                    )  # (nf, *vshape, nloc * 3, nloc * 3)
                 ret.update(hess)
             return ret
 
@@ -195,12 +223,12 @@ def make_hessian_model(T_Model):
 
         def __call__(
             self,
-            xx,
-        ):
+            coord,
+        ) -> torch.Tensor:
             ci = self.ci
             atype, box, fparam, aparam = self.atype, self.box, self.fparam, self.aparam
             res = super(CM, self.obj).forward_common(
-                xx.unsqueeze(0),
+                coord.unsqueeze(0),
                 atype.unsqueeze(0),
                 box.unsqueeze(0) if box is not None else None,
                 fparam.unsqueeze(0) if fparam is not None else None,
