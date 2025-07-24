@@ -111,22 +111,21 @@ def make_hessian_model(T_Model):
                     vdef["energy"].r_hessian
                     and sum(hess_yes) == 1
                     and "energy_derv_r" in ret
-                    # and nf:=coord.shape[0] == 1 # large overhead for nf>1; maybe a warning is fine?
                 ):  # use force to calculate energy hessian
                     force:torch.Tensor = ret["energy_derv_r"].squeeze(-2) # nf x nloc x 3
                     hess = torch.zeros(*force.shape, *coord.shape[-2:], device=force.device, dtype=force.dtype) # nf, nloc, 3, nloc, 3
                     # TODO: lazy compute
-                    for nf in range(force.shape[0]):
-                        for nloc in range(force.shape[1]):
-                            for i in range(3):
-                                # TODO: possibility of parallelization?
-                                # use an eye matrix for grad_output and set is_grad_batched=True
-                                hess[nf, nloc, i] = torch.autograd.grad(
-                                    outputs=force[nf, nloc, i],
-                                    inputs=coord,
-                                    create_graph=self.training,
-                                    retain_graph=True,
-                                )[0][nf] # only [nf] contains values, other chunks are zero
+                    for nloc in range(force.shape[1]):
+                        for i in range(3):
+                            # TODO: possibility of parallelization?
+                            # use an eye matrix for grad_output and set is_grad_batched=True
+                            hess[:, nloc, i] = torch.autograd.grad(
+                                outputs=force[:, nloc, i],
+                                inputs=coord,
+                                grad_outputs=torch.ones_like(force[:, nloc, i]),
+                                create_graph=self.training,
+                                retain_graph=True,
+                            )[0]
 
                     hess = hess.view(
                         force.shape[0], 1, force.shape[1] * 3, force.shape[1] * 3
