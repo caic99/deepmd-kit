@@ -113,25 +113,8 @@ def make_hessian_model(T_Model):
                 ):  # use force to calculate energy hessian
                     force: torch.Tensor = ret["energy_derv_r"]\
                         .squeeze(-2)  # nf x nloc x 3
-                    nf, nloc, _ = force.shape
-                    hess = (
-                        torch.autograd.grad(
-                            outputs=force,
-                            inputs=coord,
-                            grad_outputs=torch.eye(
-                                    nloc * 3, device=force.device, dtype=force.dtype
-                                )
-                                .view(nloc * 3, nloc, 3)
-                                .unsqueeze(1)  # (nloc * 3, 1, nloc, 3)
-                                .expand(-1, nf, -1, -1),  # (nloc * 3, nf, nloc, 3)
-                            create_graph=self.training,
-                            retain_graph=True,
-                            is_grads_batched=True,
-                        )[0]
-                        .swapaxes(0, 1)  # (nf, nloc * 3, nloc, 3)
-                        .view(nf, 1, nloc * 3, nloc * 3)  # (nf, 1, nloc * 3, nloc * 3)
-                    )
-                    hess = {get_hessian_name("energy"): -hess}  # negative sign for force
+                    hess = self._cal_e_hessian_block(force, coord)
+                    hess = {get_hessian_name(name="energy"): -hess}  # negative sign for force
                 else:
                     hess = self._cal_hessian_all(
                         coord,
@@ -142,6 +125,54 @@ def make_hessian_model(T_Model):
                     )  # (nf, *vshape, nloc * 3, nloc * 3)
                 ret.update(hess)
             return ret
+
+        def _cal_e_hessian_block(
+            self,
+            force: torch.Tensor,
+            coord: torch.Tensor,
+            slice: slice = slice(None),
+        ) -> torch.Tensor:
+            force = force[:, slice, :]
+            nf, nslice, _ = force.shape
+            _, nloc, _ = coord.shape
+            hess = (
+                torch.autograd.grad(
+                    outputs=force,
+                    inputs=coord,
+                    grad_outputs=torch.eye(
+                        nslice * 3, device=force.device, dtype=force.dtype
+                    )
+                    .view(nslice * 3, nslice, 3)
+                    .unsqueeze(1)  # (nslice * 3, 1, nslice, 3)
+                    .expand(-1, nf, -1, -1),  # (nslice * 3, nf, nslice, 3)
+                    create_graph=self.training,
+                    retain_graph=True,
+                    is_grads_batched=True,
+                )[0]  # (nslice * 3, nf, nloc, 3)
+                .swapaxes(0, 1)  # (nf, nslice * 3, nloc, 3)
+                .view(nf, 1, nslice * 3, nloc * 3)
+            )
+            return hess
+
+        def _cal_e_hessian_loop(
+            self,
+            force: torch.Tensor,
+            coord: torch.Tensor,
+        ) -> torch.Tensor:
+            hess = torch.zeros(
+                *force.shape, *coord.shape[-2:], device=force.device, dtype=force.dtype
+            )  # nf, nloc, 3, nloc, 3
+            for nloc in range(coord.shape[-2]):
+                for i in range(3):
+                    hess[:, nloc, i] = torch.autograd.grad(
+                        outputs=force[:, nloc, i],
+                        inputs=coord,
+                        grad_outputs=torch.ones_like(force[:, nloc, i]),
+                        create_graph=self.training,
+                        retain_graph=True,
+                    )[0]
+            nloc = coord.shape[-2]
+            return hess.view(-1, 1, nloc * 3, nloc * 3)
 
         def _cal_hessian_all(
             self,
