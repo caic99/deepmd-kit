@@ -14,6 +14,7 @@ import numpy as np
 
 from deepmd.common import (
     expand_sys_str,
+    j_loader,
 )
 from deepmd.infer.deep_dipole import (
     DeepDipole,
@@ -41,6 +42,9 @@ from deepmd.utils import random as dp_random
 from deepmd.utils.data import (
     DeepmdData,
 )
+from deepmd.utils.data_system import (
+    process_systems,
+)
 from deepmd.utils.weight_avg import (
     weighted_average,
 )
@@ -60,6 +64,8 @@ def test(
     model: str,
     system: str,
     datafile: str,
+    input_json: Optional[str] = None,
+    use_train: bool = False,
     numb_test: int,
     rand_seed: Optional[int],
     shuffle_test: bool,
@@ -78,6 +84,10 @@ def test(
         system directory
     datafile : str
         the path to the list of systems to test
+    input_json : Optional[str]
+        the training input json file. Validation systems in this file will be used.
+    use_train : bool
+        use training systems in the input json file instead of validation systems
     numb_test : int
         munber of tests to do. 0 means all data.
     rand_seed : Optional[int]
@@ -101,7 +111,25 @@ def test(
     if numb_test == 0:
         # only float has inf, but should work for min
         numb_test = float("inf")
-    if datafile is not None:
+    if input_json is not None:
+        jdata = j_loader(input_json)
+        data_key = "training_data" if use_train else "validation_data"
+        data_params = jdata.get("training", {}).get(data_key, {})
+        systems = data_params.get("systems")
+        if not systems:
+            raise RuntimeError(
+                f"No {'training' if use_train else 'validation'} data found in input json"
+            )
+        root = Path(input_json).parent
+        if isinstance(systems, str):
+            systems = str((root / Path(systems)).resolve())
+        else:
+            systems = [str((root / Path(ss)).resolve()) for ss in systems]
+        patterns = data_params.get("rglob_patterns", None)
+        all_sys = process_systems(systems, patterns=patterns)
+    elif use_train:
+        raise RuntimeError("--train-data requires --input-json")
+    elif datafile is not None:
         with open(datafile) as datalist:
             all_sys = datalist.read().splitlines()
     else:
