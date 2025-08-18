@@ -123,7 +123,7 @@ class EnergyModel(DPModelCommon, DPEnergyModel_):
                 model_predict["force"] = model_ret["dforce"]
             if "mask" in model_ret:
                 model_predict["mask"] = model_ret["mask"]
-            if self._hessian_enabled:
+            if self._hessian_enabled and "energy_derv_r_derv_r" in model_ret:
                 model_predict["hessian"] = model_ret["energy_derv_r_derv_r"].squeeze(-2)
         else:
             model_predict = model_ret

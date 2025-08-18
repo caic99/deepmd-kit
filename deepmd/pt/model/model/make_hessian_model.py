@@ -106,6 +106,7 @@ def make_hessian_model(T_Model):
             )
 
             if any(hess_yes):
+                return ret  # HACK: Calculate hessian in the training loop
                 if (
                     vdef["energy"].r_hessian
                     and sum(hess_yes) == 1
@@ -145,7 +146,7 @@ def make_hessian_model(T_Model):
                     .view(nslice * 3, nslice, 3)
                     .unsqueeze(1)  # (nslice * 3, 1, nslice, 3)
                     .expand(-1, nf, -1, -1),  # (nslice * 3, nf, nslice, 3)
-                    create_graph=self.training,
+                    create_graph=True, #self.training,
                     retain_graph=True,
                     is_grads_batched=True,
                 )[0]  # (nslice * 3, nf, nloc, 3)

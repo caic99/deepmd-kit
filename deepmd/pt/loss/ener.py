@@ -555,29 +555,55 @@ class EnergyHessianStdLoss(EnergyStdLoss):
         )
         coef = learning_rate / self.starter_learning_rate
         pref_h = self.limit_pref_h + (self.start_pref_h - self.limit_pref_h) * coef
+        # max number of atoms in a batch
+        HESSIAN_BATCH_SIZE = 48  # FIXME: make it configurable
+        if self.has_h:
+            find_hessian = label["find_hessian"]
+            pref_h: float = pref_h * find_hessian
+            # Accumulate global sums for unbiased MAE/RMSE across tiles
+            total_abs_err = torch.zeros((), device=env.DEVICE)
+            total_sse = torch.zeros((), device=env.DEVICE)
+            total_count: int = 0
+            # split hessian calculations into batches
+            slices = list(range(0, natoms, HESSIAN_BATCH_SIZE))
+            # add the last slice
+            if slices[-1] != natoms:
+                slices.append(natoms)
 
-        if self.has_h and "hessian" in model_pred and "hessian" in label:
-            find_hessian = label.get("find_hessian", 0.0)
-            pref_h = pref_h * find_hessian
-            diff_h = label["hessian"].reshape(
-                -1,
-            ) - model_pred["hessian"].reshape(
-                -1,
-            )
-            l2_hessian_loss = torch.mean(torch.square(diff_h))
+            for i,j in zip(slices[:-1], slices[1:]):
+                h_tile_pred = model._cal_e_hessian_block(
+                    model_pred["force"], input_dict["coord"], slice(i, j)
+                )  # assuming force is always calculated
+                h_tile_label = label["hessian"].view(
+                    input_dict["coord"].shape[0], # nframes
+                    natoms * 3,
+                    natoms * 3,
+                )[:, None, i * 3 : j * 3, :]
+                h_tile_diff:torch.Tensor = h_tile_label - h_tile_pred
+                h_tile_l2 = h_tile_diff.square().mean()
+                h_tile_loss = h_tile_l2 * pref_h
+                if not self.inference and not torch.isnan(h_tile_loss):
+                    # TODO: check if OOM happenes with retain_graph
+                    h_tile_loss.backward(retain_graph=True) # required!
+                # Accumulate unbiased metrics (size-weighted across tiles)
+                total_abs_err = total_abs_err + h_tile_diff.abs().sum().detach()
+                total_sse = total_sse + h_tile_diff.square().sum().detach()
+                total_count += int(h_tile_diff.numel())
+
+            rmse_h = torch.sqrt(total_sse / total_count)
+            more_loss["rmse_h"] = self.display_if_exist(rmse_h, find_hessian)
+            if mae:
+                mae_h = total_abs_err / total_count
+                more_loss["mae_h"] = self.display_if_exist(mae_h, find_hessian)
             if not self.inference:
                 more_loss["l2_hessian_loss"] = self.display_if_exist(
-                    l2_hessian_loss.detach(), find_hessian
+                    total_sse / total_count, find_hessian
                 )
-            loss += pref_h * l2_hessian_loss
-            rmse_h = l2_hessian_loss.sqrt()
-            more_loss["rmse_h"] = self.display_if_exist(rmse_h.detach(), find_hessian)
-            if mae:
-                mae_h = torch.mean(torch.abs(diff_h))
-                more_loss["mae_h"] = self.display_if_exist(mae_h.detach(), find_hessian)
 
         if not self.inference:
-            more_loss["rmse"] = torch.sqrt(loss.detach())
+            more_loss["rmse"] = torch.sqrt(
+                loss.detach() + pref_h * more_loss.get("l2_hessian_loss",0)
+            )
         return model_pred, loss, more_loss
 
     @property
