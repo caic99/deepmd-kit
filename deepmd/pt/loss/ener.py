@@ -556,7 +556,7 @@ class EnergyHessianStdLoss(EnergyStdLoss):
         coef = learning_rate / self.starter_learning_rate
         pref_h = self.limit_pref_h + (self.start_pref_h - self.limit_pref_h) * coef
         # max number of atoms in a batch
-        HESSIAN_BATCH_SIZE = 48  # FIXME: make it configurable
+        HESSIAN_BATCH_SIZE = 24  # FIXME: make it configurable
         if self.has_h:
             find_hessian = label["find_hessian"]
             pref_h: float = pref_h * find_hessian
@@ -569,7 +569,6 @@ class EnergyHessianStdLoss(EnergyStdLoss):
             # add the last slice
             if slices[-1] != natoms:
                 slices.append(natoms)
-
             for i,j in zip(slices[:-1], slices[1:]):
                 h_tile_pred = model._cal_e_hessian_block(
                     model_pred["force"], input_dict["coord"], slice(i, j)
@@ -582,14 +581,18 @@ class EnergyHessianStdLoss(EnergyStdLoss):
                 h_tile_diff:torch.Tensor = h_tile_label - h_tile_pred
                 h_tile_l2 = h_tile_diff.square().mean()
                 h_tile_loss = h_tile_l2 * pref_h
-                if not self.inference and not torch.isnan(h_tile_loss):
-                    # TODO: check if OOM happenes with retain_graph
-                    h_tile_loss.backward(retain_graph=True) # required!
+                if not self.inference:
+                    h_tile_loss.backward(retain_graph=False)
+                    model_pred, loss, more_loss = super().forward(
+                        input_dict, model, label, natoms, learning_rate, mae=mae
+                    )  # rebuilding the calculation graph
                 # Accumulate unbiased metrics (size-weighted across tiles)
                 total_abs_err = total_abs_err + h_tile_diff.abs().sum().detach()
                 total_sse = total_sse + h_tile_diff.square().sum().detach()
                 total_count += int(h_tile_diff.numel())
 
+            # Note: Observed metrics in training are better than expected,
+            # for the hessians calculated later in the loop are inferred with the updated weights.
             rmse_h = torch.sqrt(total_sse / total_count)
             more_loss["rmse_h"] = self.display_if_exist(rmse_h, find_hessian)
             if mae:
