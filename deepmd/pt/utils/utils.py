@@ -158,49 +158,37 @@ class SiLUT(torch.nn.Module):
 class ActivationFn(torch.nn.Module):
     def __init__(self, activation: Optional[str]) -> None:
         super().__init__()
-        self.activation: str = activation if activation is not None else "linear"
-        if self.activation.lower().startswith(
-            "silut"
-        ) or self.activation.lower().startswith("custom_silu"):
-            threshold = (
-                float(self.activation.split(":")[-1]) if ":" in self.activation else 3.0
-            )
+        activation = activation.lower() if activation is not None else "linear"
+        if activation == "relu":
+            self.act_module = torch.nn.ReLU()
+        elif activation == "gelu" or activation == "gelu_tf":
+            self.act_module = torch.nn.GELU(approximate="tanh")
+        elif activation == "tanh":
+            self.act_module = torch.nn.Tanh()
+        elif activation == "relu6":
+            self.act_module = torch.nn.ReLU6()
+        elif activation == "softplus":
+            self.act_module = torch.nn.Softplus()
+        elif activation == "sigmoid":
+            self.act_module = torch.nn.Sigmoid()
+        elif activation == "silu":
+            self.act_module = torch.nn.SiLU()
+        elif activation.startswith("silut") or activation.startswith("custom_silu"):
+            threshold = float(activation.split(":")[-1]) if ":" in activation else 3.0
             if env.CUSTOM_OP_USE_JIT:
                 # for efficient training but can not be jit
-                self.silut = SiLUTScript(threshold=threshold)
+                self.act_module = SiLUTScript(threshold=threshold)
             else:
                 # for jit freeze
-                self.silut = SiLUT(threshold=threshold)
-        else:
-            self.silut = None
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Returns the tensor after applying activation function corresponding to `activation`."""
-        # See jit supported types: https://pytorch.org/docs/stable/jit_language_reference.html#supported-type
-
-        if self.activation.lower() == "relu":
-            return F.relu(x)
-        elif self.activation.lower() == "gelu" or self.activation.lower() == "gelu_tf":
-            return F.gelu(x, approximate="tanh")
-        elif self.activation.lower() == "tanh":
-            return torch.tanh(x)
-        elif self.activation.lower() == "relu6":
-            return F.relu6(x)
-        elif self.activation.lower() == "softplus":
-            return F.softplus(x)
-        elif self.activation.lower() == "sigmoid":
-            return torch.sigmoid(x)
-        elif self.activation.lower() == "silu":
-            return F.silu(x)
-        elif self.activation.lower().startswith(
-            "silut"
-        ) or self.activation.lower().startswith("custom_silu"):
-            assert self.silut is not None
-            return self.silut(x)
-        elif self.activation.lower() == "linear" or self.activation.lower() == "none":
-            return x
+                self.act_module = SiLUT(threshold=threshold)
+        elif activation == "linear" or activation == "none":
+            self.act_module = torch.nn.Identity()
         else:
             raise RuntimeError(f"activation function {self.activation} not supported")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Returns the tensor after applying activation function."""
+        return self.act_module(x)
 
 
 @overload
