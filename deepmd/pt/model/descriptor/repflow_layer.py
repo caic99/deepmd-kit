@@ -33,7 +33,52 @@ from deepmd.pt.utils.utils import (
 from deepmd.utils.version import (
     check_version_compatibility,
 )
+from torch_scatter import gather_coo
 
+from deepmd.pt.utils.env import (
+    JIT,
+)
+if JIT:
+    torch.jit.export(gather_coo)
+@torch.jit.export
+def index_select(
+    input: torch.Tensor, dim: int, index: torch.Tensor, use_torch_scatter: bool = not JIT
+) -> torch.Tensor:
+    if use_torch_scatter: # JIT = True
+        return gather_coo(input, index)
+    else:
+        return torch.index_select(input, dim, index)
+
+def index_select_dev(
+    input: torch.Tensor,
+    dim: int,
+    index: torch.Tensor,
+) -> torch.Tensor:
+    """
+    A wrapper of index_select to support negative dim.
+
+    Parameters
+    ----------
+    input
+        The input tensor.
+    dim
+        The dimension to select.
+    index
+        The indices to select.
+
+    Returns
+    -------
+    output
+        The selected tensor.
+    """
+    assert dim==0, "Only dim=0 is supported in index_select!"
+    torch_result =  torch.index_select(input, dim, index)
+    # check if the 2d index is sorted in the last dimension
+    sorted_index = torch.sort(index).values
+    assert torch.allclose(index, sorted_index), "The index in index_select must be sorted in ascending order!"
+    gather_result = gather_coo(input, index)
+    assert torch.allclose(torch_result, gather_result), "index_select and gather_coo results are not equal!"
+    return gather_result
 
 class RepFlowLayer(torch.nn.Module):
     def __init__(
@@ -593,13 +638,11 @@ class RepFlowLayer(torch.nn.Module):
             matrix, [angle_dim, node_dim, edge_dim, edge_dim]
         )
 
-        # n_angle * angle_dim
-        sub_angle_update = torch.matmul(flat_angle_ebd, sub_angle)
 
         # nf * nloc * angle_dim
         sub_node_update = torch.matmul(node_ebd, sub_node)
         # n_angle * angle_dim
-        sub_node_update = torch.index_select(
+        sub_node_update = index_select(
             sub_node_update.reshape(nf * nloc, sub_node_update.shape[-1]), 0, n2a_index
         )
 
@@ -608,8 +651,10 @@ class RepFlowLayer(torch.nn.Module):
         sub_edge_update_ij = torch.matmul(flat_edge_ebd, sub_edge_ij)
         # n_angle * angle_dim
         sub_edge_update_ik = torch.index_select(sub_edge_update_ik, 0, eik2a_index)
-        sub_edge_update_ij = torch.index_select(sub_edge_update_ij, 0, eij2a_index)
+        sub_edge_update_ij = index_select(sub_edge_update_ij, 0, eij2a_index)
 
+        # n_angle * angle_dim
+        sub_angle_update = torch.matmul(flat_angle_ebd, sub_angle)
         result_update = (
             bias
             + sub_node_update
@@ -679,7 +724,7 @@ class RepFlowLayer(torch.nn.Module):
         # nf * nloc * node/edge_dim
         sub_node_update = torch.matmul(node_ebd, node)
         # n_edge * node/edge_dim
-        sub_node_update = torch.index_select(
+        sub_node_update = index_select(
             sub_node_update.reshape(nf * nloc, sub_node_update.shape[-1]), 0, n2e_index
         )
 
@@ -857,7 +902,7 @@ class RepFlowLayer(torch.nn.Module):
                 # n_edge x (n_dim * 2 + e_dim)
                 edge_info = torch.cat(
                     [
-                        torch.index_select(
+                        index_select(
                             node_ebd.reshape(-1, self.n_dim), 0, n2e_index
                         ),
                         nei_node_ebd,
@@ -979,7 +1024,7 @@ class RepFlowLayer(torch.nn.Module):
                         (1, 1, self.a_sel, self.a_sel, 1),
                     )
                     if not self.use_dynamic_sel
-                    else torch.index_select(
+                    else index_select(
                         node_ebd_for_angle.reshape(-1, self.n_a_compress_dim),
                         0,
                         n2a_index,
@@ -992,7 +1037,7 @@ class RepFlowLayer(torch.nn.Module):
                         edge_ebd_for_angle.unsqueeze(2), (1, 1, self.a_sel, 1, 1)
                     )
                     if not self.use_dynamic_sel
-                    else torch.index_select(edge_ebd_for_angle, 0, eik2a_index)
+                    else index_select(edge_ebd_for_angle, 0, eik2a_index)
                 )
                 # nb x nloc x a_nnei x (a_nnei) x e_dim [OR] n_angle x e_dim
                 edge_for_angle_j = (
@@ -1000,7 +1045,7 @@ class RepFlowLayer(torch.nn.Module):
                         edge_ebd_for_angle.unsqueeze(3), (1, 1, 1, self.a_sel, 1)
                     )
                     if not self.use_dynamic_sel
-                    else torch.index_select(edge_ebd_for_angle, 0, eij2a_index)
+                    else index_select(edge_ebd_for_angle, 0, eij2a_index)
                 )
                 # nb x nloc x a_nnei x a_nnei x (e_dim + e_dim) [OR] n_angle x (e_dim + e_dim)
                 edge_for_angle_info = torch.cat(
