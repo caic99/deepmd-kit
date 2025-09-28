@@ -260,7 +260,7 @@ class DescrptSeA(BaseDescriptor, paddle.nn.Layer):
         atype_ext: paddle.Tensor,
         nlist: paddle.Tensor,
         mapping: Optional[paddle.Tensor] = None,
-        comm_dict: Optional[dict[str, paddle.Tensor]] = None,
+        comm_dict: Optional[list[paddle.Tensor]] = None,
     ):
         """Compute the descriptor.
 
@@ -481,6 +481,7 @@ class DescrptBlockSeA(DescriptorBlock):
                 precision=self.precision,
                 resnet_dt=self.resnet_dt,
                 seed=child_seed(self.seed, ii),
+                trainable=trainable,
             )
         self.filter_layers = filter_layers
         self.stats = None

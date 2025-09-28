@@ -160,6 +160,7 @@ class DescrptSeTTebd(BaseDescriptor, paddle.nn.Layer):
             env_protection=env_protection,
             smooth=smooth,
             seed=child_seed(seed, 1),
+            trainable=trainable,
         )
         self.prec = PRECISION_DICT[precision]
         self.use_econf_tebd = use_econf_tebd
@@ -173,6 +174,7 @@ class DescrptSeTTebd(BaseDescriptor, paddle.nn.Layer):
             use_econf_tebd=use_econf_tebd,
             type_map=type_map,
             use_tebd_bias=use_tebd_bias,
+            trainable=trainable,
         )
         self.tebd_dim = tebd_dim
         self.tebd_input_mode = tebd_input_mode
@@ -413,7 +415,7 @@ class DescrptSeTTebd(BaseDescriptor, paddle.nn.Layer):
         extended_atype: paddle.Tensor,
         nlist: paddle.Tensor,
         mapping: Optional[paddle.Tensor] = None,
-        comm_dict: Optional[dict[str, paddle.Tensor]] = None,
+        comm_dict: Optional[list[paddle.Tensor]] = None,
     ):
         """Compute the descriptor.
 
@@ -529,6 +531,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
         env_protection: float = 0.0,
         smooth: bool = True,
         seed: Optional[Union[int, list[int]]] = None,
+        trainable: bool = True,
     ) -> None:
         super().__init__()
         self.rcut = float(rcut)
@@ -585,6 +588,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
             precision=self.precision,
             resnet_dt=self.resnet_dt,
             seed=child_seed(self.seed, 1),
+            trainable=trainable,
         )
         self.filter_layers = filter_layers
         if self.tebd_input_mode in ["strip"]:
@@ -598,6 +602,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
                 precision=self.precision,
                 resnet_dt=self.resnet_dt,
                 seed=child_seed(self.seed, 2),
+                trainable=trainable,
             )
             self.filter_layers_strip = filter_layers_strip
         self.stats = None
@@ -840,7 +845,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
             # nb x (nloc x nnei) x nt
             # atype_tebd_nlist = paddle.take_along_axis(atype_tebd_ext, axis=1, index=index)
             atype_tebd_nlist = paddle.take_along_axis(
-                atype_tebd_ext, axis=1, indices=index
+                atype_tebd_ext, axis=1, indices=index, broadcast=False
             )
             # nb x nloc x nnei x nt
             atype_tebd_nlist = atype_tebd_nlist.reshape([nb, nloc, nnei, nt])
@@ -864,7 +869,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
             nlist_index = nlist.reshape([nb, nloc * nnei])
             # nf x (nl x nnei)
             nei_type = paddle.take_along_axis(
-                extended_atype, indices=nlist_index, axis=1
+                extended_atype, indices=nlist_index, axis=1, broadcast=False
             )
             # nfnl x nnei
             nei_type = nei_type.reshape([nfnl, nnei])
@@ -897,7 +902,7 @@ class DescrptBlockSeTTebd(DescriptorBlock):
             ).reshape([-1, nt * 2])
             tt_full = self.filter_layers_strip.networks[0](two_side_type_embedding)
             # (nfnl x nt_i x nt_j) x ng
-            gg_t = paddle.take_along_axis(tt_full, indices=idx, axis=0)
+            gg_t = paddle.take_along_axis(tt_full, indices=idx, axis=0, broadcast=False)
             # (nfnl x nt_i x nt_j) x ng
             gg_t = gg_t.reshape([nfnl, nnei, nnei, ng])
             if self.smooth:

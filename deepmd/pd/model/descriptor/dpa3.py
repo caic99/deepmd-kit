@@ -169,6 +169,7 @@ class DescrptDPA3(BaseDescriptor, paddle.nn.Layer):
             env_protection=env_protection,
             precision=precision,
             seed=child_seed(seed, 1),
+            trainable=trainable,
         )
 
         self.use_econf_tebd = use_econf_tebd
@@ -184,6 +185,7 @@ class DescrptDPA3(BaseDescriptor, paddle.nn.Layer):
             use_econf_tebd=self.use_econf_tebd,
             use_tebd_bias=use_tebd_bias,
             type_map=type_map,
+            trainable=trainable,
         )
         self.concat_output_tebd = concat_output_tebd
         self.precision = precision
@@ -455,7 +457,7 @@ class DescrptDPA3(BaseDescriptor, paddle.nn.Layer):
         extended_atype: paddle.Tensor,
         nlist: paddle.Tensor,
         mapping: Optional[paddle.Tensor] = None,
-        comm_dict: Optional[dict[str, paddle.Tensor]] = None,
+        comm_dict: Optional[list[paddle.Tensor]] = None,
     ):
         """Compute the descriptor.
 
