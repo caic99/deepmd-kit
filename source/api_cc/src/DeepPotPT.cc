@@ -5,13 +5,99 @@
 #include <torch/csrc/autograd/profiler.h>
 #include <torch/csrc/jit/runtime/jit_exception.h>
 
+#include <atomic>
 #include <cstdint>
+#include <cstdlib>
+#include <memory>
+#include <set>
+#include <sstream>
+#include <string>
 
 #include "common.h"
 #include "device.h"
 #include "errors.h"
 
 using namespace deepmd;
+
+namespace {
+class StepProfiler {
+ public:
+  StepProfiler(const std::string& name,
+               bool use_cuda,
+               const std::string& outfile)
+      : outfile_(outfile) {
+    torch::autograd::profiler::ProfilerConfig cfg(
+        torch::autograd::profiler::ProfilerState::KINETO);
+    std::set<torch::autograd::profiler::ActivityType> activities = {
+        torch::autograd::profiler::ActivityType::CPU};
+    if (use_cuda && torch::cuda::is_available()) {
+      activities.insert(torch::autograd::profiler::ActivityType::CUDA);
+    }
+    torch::autograd::profiler::enableProfiler(cfg, activities);
+    rf_ = std::make_unique<torch::autograd::profiler::RecordFunction>(name);
+  }
+  ~StepProfiler() {
+    rf_.reset();
+    auto result = torch::autograd::profiler::disableProfiler();
+    if (result) {
+      result->save(outfile_);
+    }
+  }
+
+ private:
+  std::string outfile_;
+  std::unique_ptr<torch::autograd::profiler::RecordFunction> rf_;
+};
+
+class GlobalProfiler {
+ public:
+  std::unique_ptr<StepProfiler> recordStep(bool use_cuda) {
+    if (!initialized) {
+      initialized = true;
+      const char* env = std::getenv("DEEPMP_PROFILE");
+      if (env != nullptr) {
+        enabled = true;
+        outfile_prefix = (*env != '\0') ? std::string(env)
+                                        : std::string("deeppotpt_profile");
+        if (outfile_prefix.size() >= 5 &&
+            outfile_prefix.substr(outfile_prefix.size() - 5) == ".json") {
+          outfile_prefix.erase(outfile_prefix.size() - 5);
+        }
+        const char* steps_env = std::getenv("DEEPMP_PROFILE_STEPS");
+        if (steps_env != nullptr) {
+          std::stringstream ss(steps_env);
+          std::string token;
+          while (std::getline(ss, token, ',')) {
+            try {
+              steps.insert(std::stoi(token));
+            } catch (...) {
+            }
+          }
+        }
+      }
+    }
+    if (!enabled) {
+      return nullptr;
+    }
+    int step = ++current_step;
+    if (!steps.empty() && steps.count(step) == 0) {
+      return nullptr;
+    }
+    std::string name = std::string("DeepPotPT::step_") + std::to_string(step);
+    std::string outfile = outfile_prefix + "_" + std::to_string(step) + ".json";
+    return std::make_unique<StepProfiler>(name, use_cuda, outfile);
+  }
+
+ private:
+  bool initialized = false;
+  bool enabled = false;
+  std::string outfile_prefix;
+  std::set<int> steps;
+  std::atomic<int> current_step{0};
+};
+
+GlobalProfiler global_profiler;
+}  // namespace
 
 void DeepPotPT::translate_error(std::function<void()> f) {
   try {
@@ -174,6 +260,7 @@ void DeepPotPT::compute(ENERGYVTYPE& ener,
                         const std::vector<VALUETYPE>& fparam,
                         const std::vector<VALUETYPE>& aparam,
                         const bool atomic) {
+  [[maybe_unused]] auto _prof_step = global_profiler.recordStep(gpu_enabled);
   torch::Device device(torch::kCUDA, gpu_id);
   if (!gpu_enabled) {
     device = torch::Device(torch::kCPU);
@@ -371,6 +458,7 @@ void DeepPotPT::compute(ENERGYVTYPE& ener,
                         const std::vector<VALUETYPE>& fparam,
                         const std::vector<VALUETYPE>& aparam,
                         const bool atomic) {
+  [[maybe_unused]] auto _prof_step = global_profiler.recordStep(gpu_enabled);
   torch::Device device(torch::kCUDA, gpu_id);
   if (!gpu_enabled) {
     device = torch::Device(torch::kCPU);
